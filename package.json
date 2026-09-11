@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-messenger-local",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Personal localhost-only WhatsApp scheduler driven through Chromium and WhatsApp Web.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js && node --check src/config.js && node --check src/storage.js && node --check src/recurrence.js && node --check src/chromium.js && node --check src/whatsapp.js && node --check src/scheduler.js && node --check src/template.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "puppeteer-core": "^24.20.0"
+  }
+}

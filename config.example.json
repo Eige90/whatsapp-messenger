@@ -1,0 +1,13 @@
+{
+  "port": 3001,
+  "chromiumPath": "",
+  "openDashboard": true,
+  "openDevTools": false,
+  "schedulerIntervalMs": 1000,
+  "suspendDetectionMs": 30000,
+  "protocolTimeoutMs": 120000,
+  "navigationTimeoutMs": 90000,
+  "actionTimeoutMs": 90000,
+  "sendConfirmationTimeoutMs": 15000,
+  "batchDelayMs": 1500
+}

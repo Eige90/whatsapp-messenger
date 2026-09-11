@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WhatsApp Messenger Local</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">LOCALHOST · PERSONAL EDITION</div>
+      <h1>WhatsApp Messenger</h1>
+      <p>Persistent schedules · Chromium · WhatsApp Web</p>
+    </div>
+    <div class="connection-panel">
+      <span id="waDot" class="dot"></span>
+      <div>
+        <strong id="waState">Starting…</strong>
+        <small id="waDetail">Opening Chromium</small>
+      </div>
+      <button id="focusChromium" class="ghost">Open Chromium</button>
+      <button id="restartChromium" class="ghost">Restart</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="stats" id="stats"></section>
+
+    <section class="grid-main">
+      <article class="card compose-card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">NEW SCHEDULE</span>
+            <h2 id="formTitle">Create message</h2>
+          </div>
+          <button id="cancelEdit" class="link hidden">Cancel edit</button>
+        </div>
+
+        <form id="scheduleForm">
+          <input type="hidden" id="scheduleId" />
+          <label>Label
+            <input id="label" placeholder="e.g. Reminder" maxlength="120" />
+          </label>
+
+          <div class="recipient-mode-tabs" role="group" aria-label="Recipient mode">
+            <button type="button" class="mode-tab active" data-mode="single">Single recipient</button>
+            <button type="button" class="mode-tab" data-mode="multiple">Multiple recipients</button>
+          </div>
+
+          <div id="singleRecipientFields">
+            <div class="two">
+              <label>Recipient name
+                <input id="recipientName" placeholder="Name" maxlength="120" />
+              </label>
+              <label>Phone number
+                <input id="phone" placeholder="491234567890" inputmode="tel" />
+                <small>International format including country code.</small>
+              </label>
+            </div>
+          </div>
+
+          <div id="multipleRecipientFields" class="hidden">
+            <div class="field-row-head">
+              <div>
+                <span class="field-title">Recipients</span>
+                <small class="muted">Each recipient can have a different name. {{name}} will be replaced individually.</small>
+              </div>
+              <button id="addRecipient" type="button" class="ghost">+ Recipient</button>
+            </div>
+            <div id="recipientRows" class="recipient-list"></div>
+            <details class="bulk-entry">
+              <summary>Paste multiple recipients</summary>
+              <p class="muted">One line per person: <code>Name;Phone</code> or just <code>Phone</code>.</p>
+              <textarea id="bulkRecipients" rows="5" placeholder="Name 1;491234567890&#10;Name 2;491234567891&#10;491234567892"></textarea>
+              <button id="applyBulkRecipients" type="button" class="ghost">Add pasted recipients</button>
+            </details>
+          </div>
+
+          <label>Message
+            <textarea id="message" rows="5" placeholder="Hello {{name}}, ..." required></textarea>
+            <small>
+              Personalization: <code>{{name}}</code> = recipient name, <code>{{phone}}</code> = phone number.
+              The final text is generated separately for every recipient.
+            </small>
+          </label>
+
+          <div class="template-buttons">
+            <button type="button" class="ghost insert-template" data-template="{{name}}">Insert {{name}}</button>
+            <button type="button" class="ghost insert-template" data-template="{{phone}}">Insert {{phone}}</button>
+          </div>
+
+          <div class="two">
+            <label>Repeat
+              <select id="recurrenceType">
+                <option value="once">Once</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="weekdays">Selected weekdays</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </label>
+            <label>Time
+              <input id="timeOfDay" type="time" required />
+            </label>
+          </div>
+
+          <div id="onceFields" class="dynamic-fields">
+            <label>Date
+              <input id="onceDate" type="date" />
+            </label>
+          </div>
+
+          <div id="weeklyFields" class="dynamic-fields hidden">
+            <label>Weekday
+              <select id="weeklyDay">
+                <option value="1">Monday</option><option value="2">Tuesday</option>
+                <option value="3">Wednesday</option><option value="4">Thursday</option>
+                <option value="5">Friday</option><option value="6">Saturday</option>
+                <option value="0">Sunday</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="weekdaysFields" class="dynamic-fields hidden">
+            <span class="field-title">Weekdays</span>
+            <div class="weekday-grid">
+              <label><input type="checkbox" name="weekday" value="1" />Mon</label>
+              <label><input type="checkbox" name="weekday" value="2" />Tue</label>
+              <label><input type="checkbox" name="weekday" value="3" />Wed</label>
+              <label><input type="checkbox" name="weekday" value="4" />Thu</label>
+              <label><input type="checkbox" name="weekday" value="5" />Fri</label>
+              <label><input type="checkbox" name="weekday" value="6" />Sat</label>
+              <label><input type="checkbox" name="weekday" value="0" />Sun</label>
+            </div>
+          </div>
+
+          <div id="yearlyFields" class="dynamic-fields hidden">
+            <div class="two">
+              <label>Month
+                <select id="yearlyMonth"></select>
+              </label>
+              <label>Day
+                <select id="yearlyDay"></select>
+              </label>
+            </div>
+            <div class="preset-row">
+            </div>
+          </div>
+
+          <button class="primary" type="submit" id="saveButton">Save schedule</button>
+          <p id="formMessage" class="form-message"></p>
+        </form>
+      </article>
+
+      <article class="card schedules-card">
+        <div class="card-head">
+          <div><span class="kicker">PERSISTENT</span><h2>Scheduled messages</h2></div>
+          <div class="refresh-group">
+            <small id="lastRefreshed" class="muted">Not refreshed yet</small>
+            <button id="refreshAll" class="ghost">Refresh</button>
+          </div>
+        </div>
+        <div id="schedules" class="schedule-list"></div>
+      </article>
+    </section>
+
+    <section class="card history-card">
+      <div class="card-head">
+        <div><span class="kicker">LOCAL HISTORY</span><h2>Recent activity</h2></div>
+        <button id="clearHistory" class="danger">Clear history</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Status / error</th><th>Recipient</th><th>Message</th><th>Scheduled</th><th>Sent / resolved</th><th>Delay</th><th>Source</th><th>Action</th></tr></thead>
+          <tbody id="history"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="missedModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><span class="kicker warning">MISSED WHILE OFFLINE</span><h2>What should happen to these messages?</h2></div>
+      </div>
+      <p class="muted">The PC or app was not running when these messages were due. Select which ones to send now. The rest can be skipped.</p>
+      <div id="missedList" class="missed-list"></div>
+      <div class="modal-actions">
+        <button id="sendSelected" class="primary">Send selected now</button>
+        <button id="skipSelected" class="ghost">Skip selected</button>
+        <button id="sendAll" class="ghost">Send all now</button>
+        <button id="skipAll" class="danger">Skip all</button>
+      </div>
+      <p id="missedMessage" class="form-message"></p>
+    </div>
+  </div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
