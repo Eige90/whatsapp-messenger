@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS schedules (
   updated_at INTEGER NOT NULL
 );
 
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL UNIQUE,
+  birthday TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS message_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   schedule_id INTEGER,
@@ -47,6 +57,9 @@ CREATE TABLE IF NOT EXISTS message_history (
   status TEXT NOT NULL,
   trigger_type TEXT NOT NULL DEFAULT 'scheduled',
   error TEXT,
+  run_id TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 1,
+  attempts_json TEXT,
   FOREIGN KEY(schedule_id) REFERENCES schedules(id) ON DELETE SET NULL
 );
 
@@ -71,6 +84,9 @@ ensureColumn("schedules", "last_error", "TEXT");
 ensureColumn("schedules", "last_attempt_at", "INTEGER");
 ensureColumn("schedules", "recipients_json", "TEXT");
 ensureColumn("message_history", "resolved_at", "INTEGER");
+ensureColumn("message_history", "run_id", "TEXT");
+ensureColumn("message_history", "attempt_count", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("message_history", "attempts_json", "TEXT");
 
 function safeJsonArray(value) {
   if (!value) return [];
@@ -82,12 +98,95 @@ function safeJsonArray(value) {
   }
 }
 
+function safeJsonObject(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizePhone(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (digits.length < 7 || digits.length > 15) {
     throw new Error("Phone number must contain 7 to 15 digits including country code.");
   }
   return digits;
+}
+
+function normalizeBirthday(value) {
+  const birthday = String(value || "").trim();
+  if (!birthday) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    throw new Error("Birthday must be a valid date.");
+  }
+  const [year, month, day] = birthday.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error("Birthday must be a valid date.");
+  }
+  return birthday;
+}
+
+function normalizeContactInput(input) {
+  const name = String(input?.name || "").trim();
+  if (!name) throw new Error("Contact name is required.");
+  const phone = normalizePhone(input?.phone);
+  const birthday = normalizeBirthday(input?.birthday);
+  return { name, phone, birthday };
+}
+
+export function listContacts() {
+  return db.prepare(`
+    SELECT id, name, phone, birthday, created_at, updated_at
+    FROM contacts
+    ORDER BY name COLLATE NOCASE ASC, phone ASC
+  `).all();
+}
+
+export function getContact(id) {
+  return db.prepare("SELECT id, name, phone, birthday, created_at, updated_at FROM contacts WHERE id = ?").get(Number(id)) || null;
+}
+
+export function createContact(input) {
+  const contact = normalizeContactInput(input);
+  const now = Date.now();
+  try {
+    const result = db.prepare(`
+      INSERT INTO contacts (name, phone, birthday, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(contact.name, contact.phone, contact.birthday, now, now);
+    return getContact(result.lastInsertRowid);
+  } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("unique")) {
+      throw new Error("A contact with this phone number already exists.");
+    }
+    throw error;
+  }
+}
+
+export function updateContact(id, input) {
+  if (!getContact(id)) throw new Error("Contact not found.");
+  const contact = normalizeContactInput(input);
+  try {
+    db.prepare(`
+      UPDATE contacts
+      SET name=?, phone=?, birthday=?, updated_at=?
+      WHERE id=?
+    `).run(contact.name, contact.phone, contact.birthday, Date.now(), Number(id));
+    return getContact(id);
+  } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("unique")) {
+      throw new Error("A contact with this phone number already exists.");
+    }
+    throw error;
+  }
+}
+
+export function deleteContact(id) {
+  db.prepare("DELETE FROM contacts WHERE id = ?").run(Number(id));
 }
 
 function normalizeRecipients(input) {
@@ -127,6 +226,7 @@ function hydrate(row) {
     ...row,
     active: Boolean(row.active),
     weekdays: row.weekdays_json ? safeJsonArray(row.weekdays_json).map(Number) : [],
+    automation: safeJsonObject(row.automation_json),
     recipients,
     recipient_count: recipients.length
   };
@@ -137,13 +237,20 @@ function normalizeScheduleInput(input) {
   const allowed = new Set(["once", "daily", "weekly", "weekdays", "yearly"]);
   if (!allowed.has(recurrence)) throw new Error("Invalid recurrence type.");
 
-  const message = String(input.message || "").trim();
-  if (!message) throw new Error("Message is required.");
+  const contentType = String(input.content_type || "static").toLowerCase();
+  if (!new Set(["static", "gemini"]).has(contentType)) throw new Error("Invalid message source.");
 
   const recipients = normalizeRecipients(input);
-  const usesName = /\{\{\s*name\s*\}\}/i.test(message);
+  const message = String(input.message || "").trim();
+  const geminiPrompt = String(input.gemini_prompt ?? input.automation?.prompt ?? "").trim();
+
+  if (contentType === "static" && !message) throw new Error("Message is required.");
+  if (contentType === "gemini" && !geminiPrompt) throw new Error("Gemini prompt is required.");
+
+  const templateText = contentType === "gemini" ? geminiPrompt : message;
+  const usesName = /\{\{\s*name\s*\}\}/i.test(templateText);
   if (usesName && recipients.some((r) => !r.name)) {
-    throw new Error('Every recipient needs a name when the message uses {{name}}.');
+    throw new Error('Every recipient needs a name when the text uses {{name}}.');
   }
 
   const normalized = {
@@ -151,9 +258,11 @@ function normalizeScheduleInput(input) {
     phone: recipients[0].phone,
     recipient_name: recipients[0].name,
     recipients,
-    message,
-    content_type: "static",
-    automation_json: null,
+    message: contentType === "static" ? message : "",
+    content_type: contentType,
+    automation_json: contentType === "gemini"
+      ? JSON.stringify({ provider: "gemini-web", prompt: geminiPrompt })
+      : null,
     recurrence_type: recurrence,
     once_date: input.once_date || null,
     time_of_day: String(input.time_of_day || ""),
@@ -216,12 +325,12 @@ export function updateSchedule(id, input) {
   const s = normalizeScheduleInput(input);
   db.prepare(`
     UPDATE schedules SET
-      label=?, phone=?, recipient_name=?, recipients_json=?, message=?, recurrence_type=?, once_date=?,
+      label=?, phone=?, recipient_name=?, recipients_json=?, message=?, content_type=?, automation_json=?, recurrence_type=?, once_date=?,
       time_of_day=?, weekly_day=?, weekdays_json=?, yearly_month=?, yearly_day=?,
       next_run_at=?, active=1, last_error=NULL, updated_at=?
     WHERE id=?
   `).run(
-    s.label, s.phone, s.recipient_name, JSON.stringify(s.recipients), s.message, s.recurrence_type, s.once_date,
+    s.label, s.phone, s.recipient_name, JSON.stringify(s.recipients), s.message, s.content_type, s.automation_json, s.recurrence_type, s.once_date,
     s.time_of_day, s.weekly_day, JSON.stringify(s.weekdays), s.yearly_month, s.yearly_day,
     s.next_run_at, Date.now(), Number(id)
   );
@@ -298,10 +407,16 @@ export function noteScheduleError(scheduleId, errorMessage) {
     .run(String(errorMessage || "Send failed."), Date.now(), Date.now(), Number(scheduleId));
 }
 
-export function addHistory({ schedule, recipient = null, renderedMessage = null, dueAt = null, status, triggerType = "scheduled", error = null, sentAt = null, resolvedAt = null }) {
+export function addHistory({
+  schedule, recipient = null, renderedMessage = null, dueAt = null, status,
+  triggerType = "scheduled", error = null, sentAt = null, resolvedAt = null,
+  runId = null, attemptCount = 1, attempts = []
+}) {
   const result = db.prepare(`
-    INSERT INTO message_history (schedule_id, phone, recipient_name, message, scheduled_for, sent_at, resolved_at, status, trigger_type, error)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO message_history (
+      schedule_id, phone, recipient_name, message, scheduled_for, sent_at, resolved_at,
+      status, trigger_type, error, run_id, attempt_count, attempts_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     schedule?.id ?? null,
     recipient?.phone || schedule?.phone || "",
@@ -312,18 +427,36 @@ export function addHistory({ schedule, recipient = null, renderedMessage = null,
     resolvedAt,
     status,
     triggerType,
-    error
+    error,
+    runId,
+    Math.max(0, Number(attemptCount) || 0),
+    JSON.stringify(Array.isArray(attempts) ? attempts : [])
   );
   return Number(result.lastInsertRowid);
 }
 
 export function listHistory(limit = 100) {
-  const safe = Math.max(1, Math.min(Number(limit) || 100, 500));
-  return db.prepare("SELECT * FROM message_history ORDER BY id DESC LIMIT ?").all(safe);
+  const safe = Math.max(1, Math.min(Number(limit) || 100, 5000));
+  return db.prepare(`
+    SELECT h.*, COALESCE(s.label, '') AS schedule_label
+    FROM message_history h
+    LEFT JOIN schedules s ON s.id = h.schedule_id
+    ORDER BY h.id DESC
+    LIMIT ?
+  `).all(safe).map((row) => ({
+    ...row,
+    attempts: safeJsonArray(row.attempts_json)
+  }));
 }
 
 export function getHistory(id) {
-  return db.prepare("SELECT * FROM message_history WHERE id = ?").get(Number(id)) || null;
+  const row = db.prepare(`
+    SELECT h.*, COALESCE(s.label, '') AS schedule_label
+    FROM message_history h
+    LEFT JOIN schedules s ON s.id = h.schedule_id
+    WHERE h.id = ?
+  `).get(Number(id));
+  return row ? { ...row, attempts: safeJsonArray(row.attempts_json) } : null;
 }
 
 export function clearHistory() {

@@ -6,18 +6,24 @@ import {
   closeDatabase,
   clearHistory,
   counts,
+  createContact,
   createSchedule,
+  deleteContact,
   deleteSchedule,
+  getContact,
   getSchedule,
+  listContacts,
   listHistory,
   listPendingMissed,
   listSchedules,
   setScheduleActive,
+  updateContact,
   updateSchedule
 } from "./storage.js";
 import { recurrenceLabel } from "./recurrence.js";
-import { ensureDashboardOpen, focusChromium, onChromiumClosed, restartChromium, stopChromium } from "./chromium.js";
+import { ensureDashboardOpen, focusChromium, focusDashboard, focusGemini, onChromiumClosed, stopChromium } from "./chromium.js";
 import { ensureWhatsAppOpen, whatsappStatus } from "./whatsapp.js";
+import { askGemini, geminiStatus, initializeGemini } from "./gemini.js";
 import { resolveMissedActions, retryHistory, sendNow, startScheduler, stopScheduler } from "./scheduler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,12 +39,34 @@ function jsonError(res, error, status = 400) {
 app.get("/api/status", (_req, res) => {
   res.json({
     ok: true,
-    version: "1.1.0",
+    version: "1.4.2",
     localhostOnly: true,
     whatsapp: whatsappStatus(),
+    gemini: geminiStatus(),
     counts: counts(),
     now: Date.now()
   });
+});
+
+
+app.get("/api/contacts", (_req, res) => {
+  try { res.json(listContacts()); }
+  catch (error) { jsonError(res, error, 500); }
+});
+
+app.post("/api/contacts", (req, res) => {
+  try { res.status(201).json(createContact(req.body)); }
+  catch (error) { jsonError(res, error); }
+});
+
+app.put("/api/contacts/:id", (req, res) => {
+  try { res.json(updateContact(req.params.id, req.body)); }
+  catch (error) { jsonError(res, error); }
+});
+
+app.delete("/api/contacts/:id", (req, res) => {
+  try { deleteContact(req.params.id); res.status(204).end(); }
+  catch (error) { jsonError(res, error, 500); }
 });
 
 app.get("/api/schedules", (_req, res) => {
@@ -95,25 +123,35 @@ app.post("/api/missed/resolve", async (req, res) => {
   } catch (error) { jsonError(res, error, 500); }
 });
 
-app.post("/api/chromium/focus", async (_req, res) => {
-  try { await focusChromium(); res.json({ ok: true }); }
+
+app.get("/api/gemini/status", (_req, res) => {
+  res.json(geminiStatus());
+});
+
+app.post("/api/gemini/focus", async (_req, res) => {
+  try { await focusGemini(); res.json({ ok: true }); }
   catch (error) { jsonError(res, error, 500); }
 });
 
-app.post("/api/chromium/restart", async (_req, res) => {
+app.post("/api/gemini/ask", async (req, res) => {
   try {
-    await restartChromium();
-    await ensureWhatsAppOpen();
-    await ensureDashboardOpen(`http://localhost:${config.port}`);
-    res.json({ ok: true });
+    const prompt = String(req.body?.prompt || "").trim();
+    if (!prompt) return res.status(400).json({ error: "Prompt is required." });
+    const result = await askGemini(prompt, { newChat: req.body?.newChat !== false });
+    res.json(result);
   } catch (error) { jsonError(res, error, 500); }
+});
+
+app.post("/api/chromium/focus", async (_req, res) => {
+  try { await focusChromium(); res.json({ ok: true }); }
+  catch (error) { jsonError(res, error, 500); }
 });
 
 app.use((_req, res) => res.sendFile(path.join(ROOT_DIR, "public", "index.html")));
 
 const server = app.listen(Number(config.port), "127.0.0.1", async () => {
   const url = `http://localhost:${config.port}`;
-  console.log(`\nWhatsApp Messenger Local v1.1.0`);
+  console.log(`\nWhatsApp Messenger Local v1.4.2`);
   console.log(`Dashboard: ${url}`);
   console.log(`Data: ${DB_PATH}`);
   console.log(`Scheduler interval: ${config.schedulerIntervalMs} ms`);
@@ -122,7 +160,9 @@ const server = app.listen(Number(config.port), "127.0.0.1", async () => {
   startScheduler();
   try {
     await ensureWhatsAppOpen();
+    await initializeGemini().catch((error) => console.error("Gemini:", error.message));
     await ensureDashboardOpen(url);
+    await focusDashboard();
   } catch (error) {
     console.error("Chromium / WhatsApp:", error.message);
   }

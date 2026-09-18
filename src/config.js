@@ -19,8 +19,18 @@ const defaults = {
   protocolTimeoutMs: 120000,
   navigationTimeoutMs: 90000,
   actionTimeoutMs: 90000,
-  sendConfirmationTimeoutMs: 15000,
-  batchDelayMs: 1500
+  sendConfirmationTimeoutMs: 30000,
+  postTimeoutVerificationMs: 15000,
+  batchDelayMs: 2000,
+  sendRetryRounds: 3,
+  retryRoundDelayMs: 4000,
+  openGemini: true,
+  geminiResponseTimeoutMs: 120000,
+  geminiStableMs: 1800,
+  geminiLoginGraceMs: 30000,
+  geminiGenerationRetries: 3,
+  geminiGenerationRetryDelayMs: 3000,
+  remoteDebuggingStartupTimeoutMs: 20000
 };
 
 function readLocalConfig() {
@@ -46,7 +56,17 @@ export const config = {
   navigationTimeoutMs: Number(localConfig.navigationTimeoutMs ?? defaults.navigationTimeoutMs),
   actionTimeoutMs: Number(localConfig.actionTimeoutMs ?? defaults.actionTimeoutMs),
   sendConfirmationTimeoutMs: Number(localConfig.sendConfirmationTimeoutMs ?? defaults.sendConfirmationTimeoutMs),
-  batchDelayMs: Number(localConfig.batchDelayMs ?? defaults.batchDelayMs)
+  postTimeoutVerificationMs: Number(localConfig.postTimeoutVerificationMs ?? defaults.postTimeoutVerificationMs),
+  batchDelayMs: Number(localConfig.batchDelayMs ?? defaults.batchDelayMs),
+  sendRetryRounds: Number(localConfig.sendRetryRounds ?? defaults.sendRetryRounds),
+  retryRoundDelayMs: Number(localConfig.retryRoundDelayMs ?? defaults.retryRoundDelayMs),
+  openGemini: localConfig.openGemini ?? defaults.openGemini,
+  geminiResponseTimeoutMs: Number(localConfig.geminiResponseTimeoutMs ?? defaults.geminiResponseTimeoutMs),
+  geminiStableMs: Number(localConfig.geminiStableMs ?? defaults.geminiStableMs),
+  geminiLoginGraceMs: Number(localConfig.geminiLoginGraceMs ?? defaults.geminiLoginGraceMs),
+  geminiGenerationRetries: Number(localConfig.geminiGenerationRetries ?? defaults.geminiGenerationRetries),
+  geminiGenerationRetryDelayMs: Number(localConfig.geminiGenerationRetryDelayMs ?? defaults.geminiGenerationRetryDelayMs),
+  remoteDebuggingStartupTimeoutMs: Number(localConfig.remoteDebuggingStartupTimeoutMs ?? defaults.remoteDebuggingStartupTimeoutMs)
 };
 
 function existing(paths) {

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   addHistory,
   advanceAfterFailure,
@@ -11,7 +12,12 @@ import {
   noteScheduleError,
   resolveMissed
 } from "./storage.js";
-import { isUncertainSendError, sendWhatsAppMessage } from "./whatsapp.js";
+import {
+  isUncertainSendError,
+  sendWhatsAppMessage,
+  verifyWhatsAppSendEvidence
+} from "./whatsapp.js";
+import { askGemini } from "./gemini.js";
 import { renderMessageTemplate } from "./template.js";
 import { config } from "./config.js";
 
@@ -37,48 +43,265 @@ function scheduleRecipients(schedule) {
 function syntheticScheduleFromHistory(row) {
   return {
     id: row.schedule_id || null,
+    label: row.schedule_label || "",
     phone: row.phone,
     recipient_name: row.recipient_name || "",
     recipients: [{ name: row.recipient_name || "", phone: row.phone }],
     message: row.message,
+    content_type: "static",
+    automation: null,
     recurrence_type: "once"
   };
 }
 
-async function sendOne(schedule, recipient, dueAt, triggerType) {
-  const renderedMessage = renderMessageTemplate(schedule.message, recipient);
+function schedulePrompt(schedule) {
+  return String(schedule?.automation?.prompt || "").trim();
+}
+
+function skippedMessagePreview(schedule, recipient) {
+  if (schedule.content_type === "gemini") {
+    const prompt = renderMessageTemplate(schedulePrompt(schedule), recipient);
+    return `[Gemini prompt not generated]\n${prompt}`;
+  }
+  return renderMessageTemplate(schedule.message, recipient);
+}
+
+async function buildMessage(schedule, recipient) {
+  if (schedule.content_type === "gemini") {
+    const promptTemplate = schedulePrompt(schedule);
+    if (!promptTemplate) throw new Error("Gemini schedule has no prompt.");
+    const prompt = renderMessageTemplate(promptTemplate, recipient);
+    const maxAttempts = Math.max(1, Math.min(Number(config.geminiGenerationRetries || 3), 5));
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const generated = await askGemini(prompt, { newChat: true });
+        const answer = String(generated.answer || "").trim();
+        if (!answer) throw new Error("Gemini returned an empty response.");
+        return { renderedMessage: answer, generatedBy: "gemini", prompt };
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxAttempts) {
+          console.warn(`Gemini generation attempt ${attempt}/${maxAttempts} failed for ${recipient.name || recipient.phone}: ${error.message}`);
+          await sleep(Number(config.geminiGenerationRetryDelayMs || 3000));
+        }
+      }
+    }
+
+    throw new Error(`Gemini generation failed after ${maxAttempts} attempt(s): ${lastError?.message || "unknown error"}`);
+  }
+
+  return {
+    renderedMessage: renderMessageTemplate(schedule.message, recipient),
+    generatedBy: "static",
+    prompt: null
+  };
+}
+
+function publicAttempt(attempt) {
+  return {
+    round: attempt.round,
+    at: attempt.at,
+    status: attempt.status,
+    error: attempt.error || null,
+    confirmation: attempt.confirmation || null,
+    recovered: Boolean(attempt.recovered)
+  };
+}
+
+function createRecipientState(schedule, recipient) {
+  return {
+    recipient,
+    renderedMessage: schedule.content_type === "gemini"
+      ? ""
+      : renderMessageTemplate(schedule.message, recipient),
+    generatedBy: schedule.content_type === "gemini" ? "gemini" : "static",
+    prompt: null,
+    generationAttempted: schedule.content_type !== "gemini",
+    success: false,
+    sentAt: null,
+    finalStatus: null,
+    finalError: null,
+    attempts: [],
+    lastSendMeta: null
+  };
+}
+
+async function ensureRecipientMessage(schedule, state) {
+  if (state.renderedMessage) return true;
+  if (state.generationAttempted) return false;
+
+  state.generationAttempted = true;
   try {
-    const result = await sendWhatsAppMessage(recipient.phone, renderedMessage);
-    const sentAt = result.confirmedAt || Date.now();
-    addHistory({ schedule, recipient, renderedMessage, dueAt, status: "sent", triggerType, sentAt });
-    return { ok: true, sentAt, result, recipient, renderedMessage };
+    const built = await buildMessage(schedule, state.recipient);
+    state.renderedMessage = built.renderedMessage;
+    state.generatedBy = built.generatedBy;
+    state.prompt = built.prompt;
+    return true;
   } catch (error) {
-    const status = isUncertainSendError(error) ? "uncertain" : "failed";
-    addHistory({ schedule, recipient, renderedMessage, dueAt, status, triggerType, error: error.message });
-    return { ok: false, status, error: error.message, recipient, renderedMessage };
+    state.finalStatus = "failed";
+    state.finalError = `Message generation failed: ${error.message}`;
+    state.attempts.push({ round: 0, at: Date.now(), status: "generation-failed", error: error.message });
+    return false;
+  }
+}
+
+async function maybeRecoverUncertain(state, round) {
+  if (!state.lastSendMeta?.sendAttempted || !Number.isFinite(state.lastSendMeta?.baseline)) return false;
+
+  try {
+    const evidence = await verifyWhatsAppSendEvidence(
+      state.recipient.phone,
+      state.renderedMessage,
+      Number(state.lastSendMeta.baseline)
+    );
+    if (!evidence.confirmed) return false;
+
+    state.success = true;
+    state.sentAt = evidence.confirmedAt || Date.now();
+    state.finalStatus = "sent";
+    state.finalError = null;
+    state.attempts.push({
+      round,
+      at: Date.now(),
+      status: "verified-before-retry",
+      confirmation: evidence.method,
+      recovered: true
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function performRecipientAttempt(state, round) {
+  if (state.success || state.finalStatus === "failed" && !state.renderedMessage) return;
+
+  // If the previous attempt reached WhatsApp but confirmation was uncertain,
+  // verify the exact outgoing message before sending again. This reduces duplicate sends.
+  if (state.finalStatus === "uncertain") {
+    const recovered = await maybeRecoverUncertain(state, round);
+    if (recovered) return;
+  }
+
+  try {
+    const result = await sendWhatsAppMessage(state.recipient.phone, state.renderedMessage);
+    state.success = true;
+    state.sentAt = result.confirmedAt || Date.now();
+    state.finalStatus = "sent";
+    state.finalError = null;
+    state.lastSendMeta = result.sendMeta || null;
+    state.attempts.push({
+      round,
+      at: Date.now(),
+      status: "sent",
+      confirmation: result.confirmation || null,
+      recovered: Boolean(result.recoveredFrom)
+    });
+  } catch (error) {
+    const uncertain = isUncertainSendError(error);
+    state.finalStatus = uncertain ? "uncertain" : "failed";
+    state.finalError = error.message;
+    state.lastSendMeta = error.sendMeta || null;
+    state.attempts.push({
+      round,
+      at: Date.now(),
+      status: state.finalStatus,
+      error: error.message
+    });
   }
 }
 
 async function sendSchedule(schedule, dueAt, triggerType = "scheduled") {
   return enqueue(async () => {
     const recipients = scheduleRecipients(schedule);
-    const results = [];
+    const runId = crypto.randomUUID();
+    const maxRounds = Math.max(1, Math.min(Number(config.sendRetryRounds || 3), 5));
+    const states = recipients.map((recipient) => createRecipientState(schedule, recipient));
 
-    for (let i = 0; i < recipients.length; i += 1) {
-      results.push(await sendOne(schedule, recipients[i], dueAt, triggerType));
-      if (i < recipients.length - 1) await sleep(Number(config.batchDelayMs || 1500));
+    // Gemini batches are intentionally processed recipient-by-recipient:
+    // generate for one recipient, send it, confirm it, then move to the next.
+    // This avoids leaving WhatsApp with a filled composer while Gemini work for
+    // other recipients is still happening in another tab.
+    // Retry strategy: complete a full pass across all pending recipients first.
+    // Only after that pass do we start the next retry round. This is gentler on WhatsApp Web
+    // and matches the dashboard model of one campaign with several recipients.
+    for (let round = 1; round <= maxRounds; round += 1) {
+      const pending = states.filter((state) =>
+        !state.success && (state.renderedMessage || !state.generationAttempted)
+      );
+      if (!pending.length) break;
+
+      console.log(`WhatsApp send run ${runId}: round ${round}/${maxRounds}, ${pending.length} recipient(s) pending.`);
+
+      for (let i = 0; i < pending.length; i += 1) {
+        const state = pending[i];
+        const messageReady = await ensureRecipientMessage(schedule, state);
+        if (messageReady) await performRecipientAttempt(state, round);
+        if (i < pending.length - 1) await sleep(Number(config.batchDelayMs || 2000));
+      }
+
+      const stillPending = states.filter((state) => !state.success && state.renderedMessage);
+      if (stillPending.length && round < maxRounds) {
+        await sleep(Number(config.retryRoundDelayMs || 4000));
+      }
+    }
+
+    const results = states.map((state) => ({
+      ok: state.success,
+      status: state.success ? "sent" : (state.finalStatus || "failed"),
+      error: state.success ? null : (state.finalError || "Send failed."),
+      recipient: state.recipient,
+      renderedMessage: state.renderedMessage || skippedMessagePreview(schedule, state.recipient),
+      sentAt: state.sentAt,
+      attemptCount: state.attempts.filter((a) => ["sent", "failed", "uncertain"].includes(a.status)).length,
+      attempts: state.attempts.map(publicAttempt),
+      generatedBy: state.generatedBy
+    }));
+
+    for (const result of results) {
+      addHistory({
+        schedule,
+        recipient: result.recipient,
+        renderedMessage: result.renderedMessage,
+        dueAt,
+        status: result.status,
+        triggerType,
+        error: result.error,
+        sentAt: result.sentAt,
+        runId,
+        attemptCount: result.attemptCount,
+        attempts: result.attempts
+      });
     }
 
     const failed = results.filter((r) => !r.ok);
     const lastSent = results.filter((r) => r.ok).map((r) => r.sentAt).sort((a, b) => b - a)[0] || null;
+
     if (!failed.length) {
-      return { ok: true, sentAt: lastSent || Date.now(), results, recipientCount: recipients.length };
+      return {
+        ok: true,
+        sentAt: lastSent || Date.now(),
+        results,
+        recipientCount: recipients.length,
+        runId,
+        rounds: maxRounds
+      };
     }
 
     const uncertain = failed.filter((r) => r.status === "uncertain").length;
     const hardFailed = failed.length - uncertain;
-    const summary = `${failed.length} of ${recipients.length} recipient(s) need attention (${hardFailed} failed, ${uncertain} uncertain).`;
-    return { ok: false, error: summary, results, sentAt: lastSent, recipientCount: recipients.length };
+    const summary = `${failed.length} of ${recipients.length} recipient(s) still need attention after up to ${maxRounds} round(s) (${hardFailed} failed, ${uncertain} uncertain).`;
+    return {
+      ok: false,
+      error: summary,
+      results,
+      sentAt: lastSent,
+      recipientCount: recipients.length,
+      runId,
+      rounds: maxRounds
+    };
   });
 }
 
@@ -128,16 +351,19 @@ export async function resolveMissedActions(actions) {
     if (!item || item.missed_status !== "pending") continue;
     if (action.action === "skip") {
       resolveMissed(item.missed_id, "skipped");
+      const runId = crypto.randomUUID();
       for (const recipient of scheduleRecipients(item.schedule)) {
-        const renderedMessage = renderMessageTemplate(item.schedule.message, recipient);
         addHistory({
           schedule: item.schedule,
           recipient,
-          renderedMessage,
+          renderedMessage: skippedMessagePreview(item.schedule, recipient),
           dueAt: item.due_at,
           status: "skipped",
           triggerType: "startup",
-          resolvedAt: Date.now()
+          resolvedAt: Date.now(),
+          runId,
+          attemptCount: 0,
+          attempts: []
         });
       }
       results.push({ id: item.missed_id, ok: true, action: "skip" });
@@ -172,6 +398,8 @@ export async function retryHistory(historyId) {
     throw new Error("Only failed or uncertain messages can be retried.");
   }
 
+  // Retry sends the exact text that was already generated/stored in history.
+  // It still uses the same three-round retry strategy, but never regenerates Gemini text.
   const schedule = syntheticScheduleFromHistory(previous);
   const result = await sendSchedule(schedule, previous.scheduled_for || Date.now(), "retry");
   if (result.ok) clearScheduleError(previous.schedule_id, result.sentAt);

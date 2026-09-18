@@ -13,14 +13,23 @@
       <h1>WhatsApp Messenger</h1>
       <p>Persistent schedules · Chromium · WhatsApp Web</p>
     </div>
-    <div class="connection-panel">
-      <span id="waDot" class="dot"></span>
-      <div>
-        <strong id="waState">Starting…</strong>
-        <small id="waDetail">Opening Chromium</small>
+    <div class="connection-stack">
+      <div class="connection-panel">
+        <span id="waDot" class="dot"></span>
+        <div>
+          <strong id="waState">Starting…</strong>
+          <small id="waDetail">Opening Chromium</small>
+        </div>
+        <button id="focusChromium" class="ghost">WhatsApp</button>
       </div>
-      <button id="focusChromium" class="ghost">Open Chromium</button>
-      <button id="restartChromium" class="ghost">Restart</button>
+      <div class="connection-panel">
+        <span id="geminiDot" class="dot"></span>
+        <div>
+          <strong id="geminiState">Gemini starting…</strong>
+          <small id="geminiDetail">Opening Gemini</small>
+        </div>
+        <button id="focusGemini" class="ghost">Gemini</button>
+      </div>
     </div>
   </header>
 
@@ -77,17 +86,45 @@
             </details>
           </div>
 
-          <label>Message
-            <textarea id="message" rows="5" placeholder="Hello {{name}}, ..." required></textarea>
-            <small>
-              Personalization: <code>{{name}}</code> = recipient name, <code>{{phone}}</code> = phone number.
-              The final text is generated separately for every recipient.
-            </small>
-          </label>
+          <div>
+            <span class="field-title">Message source</span>
+            <div class="source-tabs" role="group" aria-label="Message source">
+              <button type="button" class="source-tab active" data-source="static">Static text</button>
+              <button type="button" class="source-tab" data-source="gemini">Gemini Web</button>
+            </div>
+          </div>
 
-          <div class="template-buttons">
-            <button type="button" class="ghost insert-template" data-template="{{name}}">Insert {{name}}</button>
-            <button type="button" class="ghost insert-template" data-template="{{phone}}">Insert {{phone}}</button>
+          <div id="staticMessageFields">
+            <label>Message
+              <textarea id="message" rows="5" placeholder="Hello {{name}}, ..."></textarea>
+              <small>
+                Personalization: <code>{{name}}</code> = recipient name, <code>{{phone}}</code> = phone number.
+                The final text is generated separately for every recipient.
+              </small>
+            </label>
+            <div class="template-buttons">
+              <button type="button" class="ghost insert-template" data-target="message" data-template="{{name}}">Insert {{name}}</button>
+              <button type="button" class="ghost insert-template" data-target="message" data-template="{{phone}}">Insert {{phone}}</button>
+            </div>
+          </div>
+
+          <div id="geminiMessageFields" class="hidden">
+            <label>Gemini prompt
+              <textarea id="geminiPrompt" rows="7" placeholder="Write a short friendly message for {{name}} ..."></textarea>
+              <small>
+                At send time the app opens Gemini Web in Chromium, asks this prompt and sends Gemini's answer through WhatsApp.
+                <code>{{name}}</code> and <code>{{phone}}</code> are replaced before Gemini is asked.
+              </small>
+            </label>
+            <div class="template-buttons">
+              <button type="button" class="ghost insert-template" data-target="geminiPrompt" data-template="{{name}}">Insert {{name}}</button>
+              <button type="button" class="ghost insert-template" data-target="geminiPrompt" data-template="{{phone}}">Insert {{phone}}</button>
+              <button type="button" class="ghost" id="testGeminiPrompt">Test prompt in Gemini</button>
+            </div>
+            <label class="gemini-preview-label">Gemini test response
+              <textarea id="geminiPreview" rows="7" readonly placeholder="A test response will appear here. It is not sent to WhatsApp."></textarea>
+            </label>
+            <p id="geminiTestMessage" class="form-message"></p>
           </div>
 
           <div class="two">
@@ -165,17 +202,55 @@
       </article>
     </section>
 
+
+    <section class="card contacts-card">
+      <div class="card-head">
+        <div>
+          <span class="kicker">LOCAL ADDRESS BOOK</span>
+          <h2>Contacts</h2>
+          <small class="muted">Stored only in <code>data/whatsapp.db</code>. Nothing is imported from WhatsApp.</small>
+        </div>
+      </div>
+      <div class="contacts-layout">
+        <form id="contactForm" class="contact-form">
+          <input type="hidden" id="contactId" />
+          <div class="two">
+            <label>Name
+              <input id="contactName" placeholder="Name" maxlength="120" required />
+            </label>
+            <label>Phone number
+              <input id="contactPhone" placeholder="491234567890" inputmode="tel" required />
+            </label>
+          </div>
+          <label>Birthday
+            <input id="contactBirthday" type="date" />
+            <small>Optional. Stored locally so it can later be used for yearly birthday schedules.</small>
+          </label>
+          <div class="contact-form-actions">
+            <button class="primary" type="submit" id="saveContact">Save contact</button>
+            <button class="ghost hidden" type="button" id="cancelContactEdit">Cancel edit</button>
+          </div>
+          <p id="contactMessage" class="form-message"></p>
+        </form>
+        <div>
+          <div class="field-row-head">
+            <div><span class="field-title">Saved contacts</span><small class="muted">Use a saved contact without reading your WhatsApp address book.</small></div>
+          </div>
+          <div id="contacts" class="contact-list"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="card history-card">
       <div class="card-head">
-        <div><span class="kicker">LOCAL HISTORY</span><h2>Recent activity</h2></div>
+        <div>
+          <span class="kicker">LOCAL HISTORY</span>
+          <h2>Recent activity</h2>
+          <small class="muted">Multi-recipient sends are grouped as one run. Failed recipients are retried automatically in up to 3 full rounds.</small>
+        </div>
         <button id="clearHistory" class="danger">Clear history</button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Status / error</th><th>Recipient</th><th>Message</th><th>Scheduled</th><th>Sent / resolved</th><th>Delay</th><th>Source</th><th>Action</th></tr></thead>
-          <tbody id="history"></tbody>
-        </table>
-      </div>
+      <div id="history" class="history-runs"></div>
     </section>
   </main>
 

@@ -1,8 +1,8 @@
 {
   "name": "whatsapp-messenger-local",
-  "version": "1.1.1",
+  "version": "1.4.2",
   "private": true,
-  "description": "Personal localhost-only WhatsApp scheduler driven through Chromium and WhatsApp Web.",
+  "description": "Personal localhost-only WhatsApp scheduler driven through Chromium, WhatsApp Web and optional Gemini Web automation.",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/config.js && node --check src/storage.js && node --check src/recurrence.js && node --check src/chromium.js && node --check src/whatsapp.js && node --check src/scheduler.js && node --check src/template.js && node --check public/app.js"
+    "gemini-login": "node src/gemini-login.js",
+    "check": "node --check src/server.js && node --check src/config.js && node --check src/storage.js && node --check src/recurrence.js && node --check src/chromium.js && node --check src/whatsapp.js && node --check src/gemini.js && node --check src/gemini-login.js && node --check src/scheduler.js && node --check src/template.js && node --check public/app.js"
   },
   "dependencies": {
     "express": "^5.1.0",
