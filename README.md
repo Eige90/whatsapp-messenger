@@ -6,6 +6,31 @@ The application uses a persistent Chromium profile to control **WhatsApp Web** a
 
 > Current version: **v1.4.2**
 
+## Start the application
+
+If the project is already installed, open PowerShell in the project folder and start it with:
+
+```powershell
+npm.cmd start
+```
+
+That is the normal command to start **WhatsApp Messenger Local**.
+
+On the first installation, install the dependencies once:
+
+```powershell
+npm.cmd install
+npm.cmd start
+```
+
+A `config.local.json` file is **optional**. The application has built-in defaults in `src/config.js`; create `config.local.json` only if you want local overrides.
+
+The dashboard normally runs at:
+
+```text
+http://localhost:3001
+```
+
 ---
 
 ## Why I built this
@@ -297,7 +322,6 @@ Quick start on Windows PowerShell:
 git clone https://github.com/Eige90/whatsapp-messenger.git
 cd whatsapp-messenger
 npm.cmd install
-Copy-Item config.example.json config.local.json
 npm.cmd start
 ```
 
@@ -355,6 +379,31 @@ Ein persönliches, lokal ausgeführtes WhatsApp-Automatisierungsprojekt, das vol
 Die Anwendung steuert **WhatsApp Web** und optional **Google Gemini Web** über ein persistentes Chromium-Profil. Geplante Nachrichten, Kontakte, Geburtstage, Wiederholungsregeln und der Versandverlauf werden lokal in SQLite gespeichert.
 
 > Aktuelle Version: **v1.4.2**
+
+## Anwendung starten
+
+Wenn das Projekt bereits installiert ist, PowerShell im Projektordner öffnen und die Anwendung mit folgendem Befehl starten:
+
+```powershell
+npm.cmd start
+```
+
+Das ist der normale Startbefehl für **WhatsApp Messenger Local**.
+
+Bei einer neuen Installation müssen die Abhängigkeiten einmalig installiert werden:
+
+```powershell
+npm.cmd install
+npm.cmd start
+```
+
+Eine `config.local.json` ist **optional**. Die Anwendung besitzt Standardwerte in `src/config.js`. Eine `config.local.json` wird nur benötigt, wenn lokale Einstellungen überschrieben werden sollen.
+
+Das Dashboard läuft normalerweise unter:
+
+```text
+http://localhost:3001
+```
 
 ---
 
@@ -649,7 +698,6 @@ Schnellstart unter Windows PowerShell:
 git clone https://github.com/Eige90/whatsapp-messenger.git
 cd whatsapp-messenger
 npm.cmd install
-Copy-Item config.example.json config.local.json
 npm.cmd start
 ```
 
