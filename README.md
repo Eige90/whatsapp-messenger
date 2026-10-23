@@ -374,6 +374,14 @@ Use automation responsibly and only message recipients who expect or want the me
 
 ---
 
+## Roadmap / Open verification items
+
+- [ ] Run end-to-end tests for multiple recipients, per-recipient Gemini generation and send confirmation.
+- [ ] Test Chromium persistence and Gemini login after restart.
+- [ ] Test missed-message review and retry rounds with failures.
+- [ ] Keep SQLite database, browser profile and local configuration private.
+
+
 # Deutsch
 
 # WhatsApp Messenger Local
@@ -1215,3 +1223,11 @@ Logs und temporäre Dateien
 **English:** Contacts are entered manually in the dashboard and stored only in `data/whatsapp.db`. The application does not import contacts from WhatsApp. A contact contains a name, phone number, and optional birthday.
 
 **Deutsch:** Kontakte werden im Dashboard manuell eingetragen und ausschließlich in `data/whatsapp.db` gespeichert. Die Anwendung importiert keine Kontakte aus WhatsApp. Ein Kontakt enthält Name, Telefonnummer und optionalen Geburtstag.
+
+## Roadmap / Offene Prüfpunkte
+
+- [ ] Mehrfachempfängerversand, individuelle Gemini-Texte und Versandbestätigung praktisch testen.
+- [ ] Chromium-Sitzung und Gemini-Anmeldung nach Neustart überprüfen.
+- [ ] Dialog für verpasste Nachrichten und Wiederholungsversuche unter Fehlerbedingungen testen.
+- [ ] SQLite-Datenbank, Browserprofil und lokale Konfiguration privat halten.
+
