@@ -1231,3 +1231,7 @@ Logs und temporäre Dateien
 - [ ] Dialog für verpasste Nachrichten und Wiederholungsversuche unter Fehlerbedingungen testen.
 - [ ] SQLite-Datenbank, Browserprofil und lokale Konfiguration privat halten.
 
+
+## GitHub Pages / Website status
+
+A local Chromium/Node.js scheduler cannot execute on GitHub Pages; a separate static information page would be possible. / Der lokale Chromium-/Node.js-Scheduler kann nicht auf GitHub Pages laufen; eine separate statische Infoseite wäre möglich.
