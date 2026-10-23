@@ -314,7 +314,7 @@ The default maximum is **3 rounds**.
 
 ## Installation
 
-See [SETUP.md](SETUP.md) for the complete installation guide.
+Requirements: Node.js 24+, Git, Chromium/Chrome/Edge, and a phone with WhatsApp. Configuration is optional: to customize settings, copy `config.example.json` to `config.local.json`. Never commit the local configuration or browser profile.
 
 Quick start on Windows PowerShell:
 
@@ -690,7 +690,7 @@ Standardmäßig werden maximal **3 Durchläufe** durchgeführt.
 
 ## Installation
 
-Die vollständige Installationsanleitung befindet sich in [SETUP.md](SETUP.md).
+Voraussetzungen: Node.js 24+, Git, Chromium/Chrome/Edge und WhatsApp auf dem Handy. Die Konfiguration ist optional: Für eigene Einstellungen `config.example.json` als `config.local.json` kopieren. Lokale Konfiguration und Browserprofil niemals committen.
 
 Schnellstart unter Windows PowerShell:
 
@@ -743,3 +743,11 @@ Dies ist ein persönliches Automatisierungsprojekt, das WhatsApp Web und Gemini 
 Es handelt sich weder um ein offizielles WhatsApp- noch um ein offizielles Google-Produkt.
 
 Automatisierte Nachrichten sollten verantwortungsvoll und nur an Empfänger verschickt werden, die diese Nachrichten erwarten oder wünschen.
+
+---
+
+## Additional setup / Ergänzende Einrichtung
+
+**English:** Optional configuration (PowerShell): `Copy-Item config.example.json config.local.json`. Check syntax with `npm.cmd run check`. If Google blocks sign-in in an automated browser, stop the application, run `npm.cmd run gemini-login`, sign in manually, close the browser, then restart with `npm.cmd start`. Update by stopping the app, running `git pull` and `npm.cmd install`, then starting it again. Chromium sessions and SQLite data must remain local. A send is attempted recipient by recipient; failed recipients are retried in up to three rounds.
+
+**Deutsch:** Optionale Konfiguration (PowerShell): `Copy-Item config.example.json config.local.json`. Syntax mit `npm.cmd run check` prüfen. Falls Google die Anmeldung im automatisierten Browser blockiert, Anwendung beenden, `npm.cmd run gemini-login` ausführen, manuell anmelden, Browser schließen und anschließend `npm.cmd start` ausführen. Aktualisieren: Anwendung stoppen, `git pull` und `npm.cmd install` ausführen, erneut starten. Chromium-Sitzungen und SQLite-Daten bleiben lokal. Der Versand erfolgt Empfänger für Empfänger; fehlgeschlagene Empfänger werden in bis zu drei Durchläufen erneut versucht.
