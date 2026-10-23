@@ -1,5 +1,7 @@
 # WhatsApp Messenger Local
 
+**Source version / Version im Code:** `v1.4.2`
+
 A personal, local-first WhatsApp automation project that runs entirely on `localhost`.
 
 The application uses a persistent Chromium profile to control **WhatsApp Web** and, optionally, **Google Gemini Web**. Scheduled messages, contacts, birthdays, recurrence rules, and send history are stored locally in SQLite.
