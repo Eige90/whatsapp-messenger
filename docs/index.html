@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Ein persönliches Automatisierungswerkzeug für WhatsApp Web: Nachrichten vorbereiten, Zeitpläne festlegen und wiederkehrende Grüße mit optionaler Gemini-Unterstützung erstellen.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="WhatsApp Messenger Local">
+<meta property="og:description" content="Ein persönliches Automatisierungswerkzeug für WhatsApp Web: Nachrichten vorbereiten, Zeitpläne festlegen und wiederkehrende Grüße mit optionaler Gemini-Unterstützung erstellen.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://eige90.github.io/whatsapp-messenger/">
+<link rel="canonical" href="https://eige90.github.io/whatsapp-messenger/">
+<link rel="stylesheet" href="site.css">
+<title>WhatsApp Messenger Local · Projektseite</title>
+</head>
+<body>
+<a class="skip" href="#inhalt">Zum Inhalt springen</a>
+<header><a class="brand" href="./">WhatsApp Messenger Local</a><nav aria-label="Hauptnavigation"><a href="#ablauf">Ablauf</a><a href="#zeitplaene">Zeitpläne</a><a href="#start">Startanleitung</a></nav></header>
+<main id="inhalt">
+<section class="hero" aria-label="Überblick"><div><p class="eyebrow">JavaScript · SQLite · Chromium</p><h1>Nachrichten planen. Lokal ausführen.</h1><p class="intro">Ein persönliches Automatisierungswerkzeug für WhatsApp Web: Nachrichten vorbereiten, Zeitpläne festlegen und wiederkehrende Grüße mit optionaler Gemini-Unterstützung erstellen.</p><div class="actions"><a class="button primary" href="#start">Lokal starten ↗</a><a class="button" href="https://github.com/Eige90/whatsapp-messenger">Quellcode auf GitHub ↗</a></div><p class="note">Diese Website ist die Projektseite. Das Dashboard und der Nachrichtenversand laufen lokal; der Rechner muss für geplante Sendungen eingeschaltet sein.</p></div><aside class="facts" aria-label="Projektdaten"><dl><dt>Version</dt><dd>1.4.2</dd><dt>Ausführung</dt><dd>Auf dem eigenen Rechner</dd><dt>Dashboard</dt><dd>localhost:3001</dd></dl></aside></section>
+<section class="section" id="ablauf"><div class="section-label">01 / So funktioniert es</div><div><h2>Vom Entwurf zur geplanten Nachricht.</h2><div class="rows"><div class="row"><strong>Kontakte & Texte</strong><p>Kontakte lokal anlegen und Nachrichten mit Platzhaltern wie <code>{{name}}</code> personalisieren.</p></div><div class="row"><strong>Planung</strong><p>Versandzeiten und Wiederholungen über das lokale Dashboard festlegen.</p></div><div class="row"><strong>Versand</strong><p>Ein persistentes Chromium-Profil steuert WhatsApp Web und bei Bedarf Gemini Web.</p></div><div class="row"><strong>Verlauf</strong><p>Zeitpläne, Kontakte und Sendehistorie werden lokal in SQLite gespeichert.</p></div></div></div></section><section class="section" id="zeitplaene"><div class="section-label">02 / Zeitpläne</div><div><h2>Einmalig oder wiederkehrend.</h2><p>Unterstützt werden einmalige, tägliche, wöchentliche und jährliche Termine sowie ausgewählte Wochentage. Nach einem Neustart können verpasste Nachrichten geprüft werden. Fehlgeschlagene Sendungen werden erneut versucht.</p><p>Gemini kann optional personalisierte Texte erzeugen. Feste Nachrichten funktionieren ohne Gemini.</p></div></section><section class="section" id="start"><div class="section-label">03 / Lokal starten</div><div><h2>Installieren. Verknüpfen. Planen.</h2><div class="step"><h3>1. Voraussetzungen</h3><p>Git, Node.js mit npm, Chromium/Chrome/Edge und WhatsApp auf dem Smartphone.</p></div><div class="step"><h3>2. Projekt installieren</h3><pre><code>git clone https://github.com/Eige90/whatsapp-messenger.git
+cd whatsapp-messenger
+npm install
+npm start</code></pre></div><div class="step"><h3>3. WhatsApp verknüpfen</h3><p>Das lokale Dashboard öffnet sich unter <code>http://localhost:3001</code>. Beim ersten Start WhatsApp Web per QR-Code verknüpfen.</p></div><p>Die <a href="https://github.com/Eige90/whatsapp-messenger#readme">vollständige Einrichtung</a> erklärt die optionale Gemini-Anmeldung und die lokale Konfiguration.</p></div></section>
+</main>
+<footer><p>Daniel Eigner · whatsapp-messenger · GitHub Pages</p><a href="https://github.com/Eige90">Weitere Projekte auf GitHub ↗</a></footer>
+</body>
+</html>
